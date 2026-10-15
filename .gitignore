@@ -1,4 +1,3 @@
-README.md
 target/
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
@@ -31,3 +30,10 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### macOS ###
+.DS_Store
+
+### Personal notes (not for submission) ###
+PLAN.md
+NOTES.md

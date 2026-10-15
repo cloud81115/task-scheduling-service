@@ -1,9 +1,35 @@
 spring:
   application:
-    name: demo
+    name: task-scheduler
 
-# define mysql properties here
+  # MySQL
+  datasource:
+    url: jdbc:mysql://localhost:3306/taskdb?serverTimezone=UTC
+    username: taskuser
+    password: taskpass
+  jpa:
+    hibernate:
+      ddl-auto: validate   # schema is owned by init.sql
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
 
-# define redis properties here
+  # Redis (Spring Boot 3 uses spring.data.redis, not spring.redis)
+  data:
+    redis:
+      host: localhost
+      port: 6379
 
-# define rocketmq properties here
+# RocketMQ
+rocketmq:
+  name-server: localhost:9876
+  producer:
+    group: task-scheduler-producer
+    send-message-timeout: 3000
+
+app:
+  scheduler:
+    topic: task-schedule-topic
+    poll-interval-ms: 1000

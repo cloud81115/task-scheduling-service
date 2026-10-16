@@ -1,3 +1,5 @@
+version: "3.8"
+
 services:
   mysql:
     image: mysql:8.0
@@ -38,7 +40,8 @@ services:
       JAVA_OPT_EXT: "-Xms256m -Xmx256m -Xmn128m"
     command: sh mqnamesrv
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9876"]
+      # 9876 speaks RocketMQ's own protocol, not HTTP, so curl always fails; check TCP instead
+      test: ["CMD", "bash", "-c", "</dev/tcp/localhost/9876"]
       interval: 15s
       timeout: 10s
       retries: 5

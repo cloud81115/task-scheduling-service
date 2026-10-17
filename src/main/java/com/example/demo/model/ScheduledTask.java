@@ -7,9 +7,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
-import lombok.AccessLevel;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -23,7 +21,6 @@ import java.util.Map;
 @Table(name = "scheduled_task")
 @Getter
 @Setter
-@NoArgsConstructor(access = AccessLevel.PROTECTED) // required by JPA, hidden from callers
 public class ScheduledTask {
 
     @Id
@@ -56,6 +53,14 @@ public class ScheduledTask {
     @Version
     @Column(name = "version", nullable = false)
     private Long version;
+
+    /**
+     * Required by JPA; hidden so callers use {@link #pending}.
+     * Written by hand instead of Lombok's @NoArgsConstructor, which the
+     * Eclipse compiler in the editor's Java extension emits with an empty body.
+     */
+    protected ScheduledTask() {
+    }
 
     public static ScheduledTask pending(String taskId, Instant executeAt, Map<String, Object> payload) {
         ScheduledTask task = new ScheduledTask();

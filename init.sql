@@ -6,6 +6,5 @@ CREATE TABLE IF NOT EXISTS scheduled_task (
     created_at   DATETIME(3) NOT NULL,
     updated_at   DATETIME(3) NOT NULL,
     triggered_at DATETIME(3) NULL,
-    version      BIGINT      NOT NULL DEFAULT 0,
     INDEX idx_status_execute_at (status, execute_at)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;

@@ -6,7 +6,6 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import jakarta.persistence.Version;
 import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
@@ -49,10 +48,6 @@ public class ScheduledTask {
 
     @Column(name = "triggered_at")
     private Instant triggeredAt;
-
-    @Version
-    @Column(name = "version", nullable = false)
-    private Long version;
 
     /**
      * Required by JPA; hidden so callers use {@link #pending}.

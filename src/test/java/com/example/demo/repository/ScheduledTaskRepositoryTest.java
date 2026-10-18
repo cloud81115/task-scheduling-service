@@ -9,17 +9,22 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Limit;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.jdbc.core.JdbcTemplate;
 
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.within;
 
 /**
  * Runs against the MySQL from docker-compose (not an embedded DB), so the
@@ -36,6 +41,9 @@ class ScheduledTaskRepositoryTest {
     @Autowired
     private ScheduledTaskRepository repository;
 
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
     private final Instant now = Instant.now().truncatedTo(ChronoUnit.MILLIS);
 
     @BeforeEach
@@ -44,18 +52,46 @@ class ScheduledTaskRepositoryTest {
     }
 
     private ScheduledTask save(String taskId, Instant executeAt) {
-        return repository.saveAndFlush(ScheduledTask.pending(taskId, executeAt, PAYLOAD));
+        return repository.saveAndFlush(new ScheduledTask(taskId, executeAt, PAYLOAD, now));
     }
 
     @Test
     void savesAndReadsBackJsonPayload() {
         save("t-json", now.plusSeconds(60));
 
-        ScheduledTask found = repository.findById("t-json").orElseThrow();
+        ScheduledTask found = repository.findByTaskId("t-json").orElseThrow();
 
         assertThat(found.getPayload()).isEqualTo(PAYLOAD);
         assertThat(found.getStatus()).isEqualTo(TaskStatus.PENDING);
-        assertThat(found.getCreatedAt()).isNotNull();
+        assertThat(found.getCreatedAt()).isEqualTo(now);
+    }
+
+    @Test
+    void duplicateTaskIdIsRejectedWithoutOverwriting() {
+        save("t-dup", now.plusSeconds(60));
+
+        assertThatThrownBy(() -> repository.saveAndFlush(
+                new ScheduledTask("t-dup", now.plusSeconds(120), Map.of("message", "overwrite?"), now)))
+                .isInstanceOf(DataIntegrityViolationException.class);
+
+        // Hibernate's session is unreliable after a failed flush, so read the row with plain SQL.
+        assertThat(jdbcTemplate.queryForObject(
+                "select json_unquote(json_extract(payload, '$.message')) from scheduled_task where task_id = 't-dup'",
+                String.class)).isEqualTo("hi");
+    }
+
+    /** The column defaults are for rows inserted outside the app, e.g. by hand. */
+    @Test
+    void columnDefaultsApplyToPlainSqlInserts() {
+        jdbcTemplate.update("insert into scheduled_task (task_id, execute_at, payload) values ('t-sql', ?, '{}')",
+                Timestamp.from(now.plusSeconds(60)));
+
+        ScheduledTask found = repository.findByTaskId("t-sql").orElseThrow();
+
+        assertThat(found.getStatus()).isEqualTo(TaskStatus.PENDING);
+        assertThat(found.getUpdatedAt()).isEqualTo(found.getCreatedAt());
+        // CURRENT_TIMESTAMP follows the session time zone; this fails by hours if it is not UTC.
+        assertThat(found.getCreatedAt()).isCloseTo(now, within(5, ChronoUnit.SECONDS));
     }
 
     @Test
@@ -101,7 +137,7 @@ class ScheduledTaskRepositoryTest {
         assertThat(repository.markTriggered("t-trigger", now)).isEqualTo(1);
         assertThat(repository.markTriggered("t-trigger", now)).isZero();
 
-        ScheduledTask task = repository.findById("t-trigger").orElseThrow();
+        ScheduledTask task = repository.findByTaskId("t-trigger").orElseThrow();
         assertThat(task.getStatus()).isEqualTo(TaskStatus.TRIGGERED);
         assertThat(task.getTriggeredAt()).isEqualTo(now);
     }
@@ -117,9 +153,9 @@ class ScheduledTaskRepositoryTest {
         assertThat(repository.markTriggered("t-trigger-first", now)).isEqualTo(1);
         assertThat(repository.markCancelled("t-trigger-first", now)).isZero();
 
-        assertThat(repository.findById("t-cancel-first").orElseThrow().getStatus())
+        assertThat(repository.findByTaskId("t-cancel-first").orElseThrow().getStatus())
                 .isEqualTo(TaskStatus.CANCELLED);
-        assertThat(repository.findById("t-trigger-first").orElseThrow().getStatus())
+        assertThat(repository.findByTaskId("t-trigger-first").orElseThrow().getStatus())
                 .isEqualTo(TaskStatus.TRIGGERED);
     }
 
@@ -131,7 +167,7 @@ class ScheduledTaskRepositoryTest {
         assertThat(repository.revertToPending("t-revert", now)).isEqualTo(1);
         assertThat(repository.revertToPending("t-revert", now)).isZero();
 
-        ScheduledTask task = repository.findById("t-revert").orElseThrow();
+        ScheduledTask task = repository.findByTaskId("t-revert").orElseThrow();
         assertThat(task.getStatus()).isEqualTo(TaskStatus.PENDING);
         assertThat(task.getTriggeredAt()).isNull();
         assertThat(repository.findDueTaskIds(now, Limit.of(10))).containsExactly("t-revert");
@@ -162,7 +198,7 @@ class ScheduledTaskRepositoryTest {
         };
 
         assertThat(rows).isEqualTo(expectedRows);
-        assertThat(repository.findById("t-matrix").orElseThrow().getStatus()).isEqualTo(expectedStatus);
+        assertThat(repository.findByTaskId("t-matrix").orElseThrow().getStatus()).isEqualTo(expectedStatus);
     }
 
     /** Puts a freshly saved PENDING task into the given status. */

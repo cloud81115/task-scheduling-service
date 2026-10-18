@@ -13,8 +13,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
-public interface ScheduledTaskRepository extends JpaRepository<ScheduledTask, String> {
+public interface ScheduledTaskRepository extends JpaRepository<ScheduledTask, Long> {
+
+    Optional<ScheduledTask> findByTaskId(String taskId);
 
     Page<ScheduledTask> findByStatus(TaskStatus status, Pageable pageable);
 
@@ -22,7 +25,7 @@ public interface ScheduledTaskRepository extends JpaRepository<ScheduledTask, St
             select t.taskId from ScheduledTask t
              where t.status = com.example.demo.model.TaskStatus.PENDING
                and t.executeAt <= :now
-             order by t.executeAt
+             order by t.executeAt, t.id
             """)
     List<String> findDueTaskIds(@Param("now") Instant now, Limit limit);
 

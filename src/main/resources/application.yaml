@@ -16,6 +16,12 @@ spring:
         jdbc:
           time_zone: UTC
 
+  # API messages (e.g. validation errors) in English regardless of the
+  # machine's or the client's language
+  web:
+    locale: en
+    locale-resolver: fixed
+
   # Redis (Spring Boot 3 uses spring.data.redis, not spring.redis)
   data:
     redis:
@@ -28,6 +34,11 @@ rocketmq:
   producer:
     group: task-scheduler-producer
     send-message-timeout: 3000
+
+# Swagger UI: document success responses as application/json instead of */*
+# (affects the docs only, not what the API returns)
+springdoc:
+  default-produces-media-type: application/json
 
 app:
   scheduler:

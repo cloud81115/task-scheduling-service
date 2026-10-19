@@ -92,7 +92,7 @@ class TaskCacheTest {
         assertThat(json.get("status").asText()).isEqualTo("pending");
         assertThat(json.get("executeAt").isTextual()).as("ISO-8601 string, not a number").isTrue();
         assertThat(json.has("@class")).isFalse();
-        assertThat(redis.getExpire(KEY_PREFIX + "cache-json")).isBetween(1L, 600L);
+        assertThat(redis.getExpire(KEY_PREFIX + "cache-json")).isBetween(1L, 60L);
     }
 
     @Test

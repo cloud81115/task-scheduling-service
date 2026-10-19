@@ -21,8 +21,11 @@ import java.time.Duration;
 
 /**
  * Caches single tasks (GET /tasks/{taskId}) in Redis. MySQL stays the source
- * of truth: entries are evicted after every status change, and the TTL bounds
- * how long a missed eviction can serve stale data.
+ * of truth: entries are evicted after every status change, and the short TTL
+ * bounds how long a stale entry can be served. One can still be cached when a
+ * read gets PENDING from MySQL, the task is triggered and evicted, and only
+ * then the read writes PENDING to Redis; or when an eviction fails while
+ * Redis is briefly unreachable.
  *
  * <p>The caching advice runs outermost, around the transaction advice, so an
  * {@code @CacheEvict} on a {@code @Transactional} method evicts after the

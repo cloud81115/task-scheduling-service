@@ -50,4 +50,4 @@ app:
     poll-interval-ms: 1000
     batch-size: 100           # max due tasks handled per poll
   cache:
-    task-ttl: 10m             # safety net if an eviction is missed
+    task-ttl: 1m              # bounds how long a stale entry can be served (see CacheConfig)

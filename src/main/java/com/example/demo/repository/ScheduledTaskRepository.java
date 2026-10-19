@@ -71,4 +71,15 @@ public interface ScheduledTaskRepository extends JpaRepository<ScheduledTask, Lo
                and t.status = com.example.demo.model.TaskStatus.PENDING
             """)
     int markCancelled(@Param("taskId") String taskId, @Param("now") Instant now);
+
+    @Transactional
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("""
+            update ScheduledTask t
+               set t.status = com.example.demo.model.TaskStatus.FAILED,
+                   t.updatedAt = :now
+             where t.taskId = :taskId
+               and t.status = com.example.demo.model.TaskStatus.PENDING
+            """)
+    int markFailed(@Param("taskId") String taskId, @Param("now") Instant now);
 }

@@ -7,7 +7,9 @@ import java.util.Locale;
 public enum TaskStatus {
     PENDING,
     TRIGGERED,
-    CANCELLED;
+    CANCELLED,
+    /** Can never be published (e.g. the message exceeds the broker's size limit). */
+    FAILED;
 
     /** Exposed in JSON and query params as lowercase, e.g. "pending". */
     @JsonValue

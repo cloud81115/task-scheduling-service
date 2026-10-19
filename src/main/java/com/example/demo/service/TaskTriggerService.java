@@ -4,6 +4,7 @@ import com.example.demo.config.CacheConfig;
 import com.example.demo.model.ScheduledTask;
 import com.example.demo.mq.TaskTriggerMessage;
 import com.example.demo.mq.TaskTriggerPublisher;
+import com.example.demo.mq.UnpublishableMessageException;
 import com.example.demo.repository.ScheduledTaskRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -54,13 +55,19 @@ public class TaskTriggerService {
     public TriggerOutcome trigger(String taskId) {
         ScheduledTask task = repository.lockPendingByTaskId(taskId).orElse(null);
         if (task == null) {
-            // Cancelled, already triggered, unknown, or being handled by another poller.
+            // Not PENDING any more, unknown, or being handled by another poller.
             return TriggerOutcome.SKIPPED;
         }
 
         Instant now = clock.instant();
         try {
             publisher.publish(new TaskTriggerMessage(task.getTaskId(), task.getExecuteAt(), now, task.getPayload()));
+        } catch (UnpublishableMessageException e) {
+            // Retrying would fail the same way and, as the earliest due task, hold
+            // up every task behind it.
+            log.error("Task {} can never be published, marking it failed", taskId, e);
+            repository.markFailed(taskId, now);
+            return TriggerOutcome.REJECTED;
         } catch (RuntimeException e) {
             // Nothing was written, so committing just releases the lock and the task stays PENDING.
             log.warn("Failed to publish task {}, will retry on the next poll: {}", taskId, e.toString());

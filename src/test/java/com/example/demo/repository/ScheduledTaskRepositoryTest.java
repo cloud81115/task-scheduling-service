@@ -177,10 +177,16 @@ class ScheduledTaskRepositoryTest {
     @CsvSource({
             "PENDING,   markTriggered,   1, TRIGGERED",
             "PENDING,   markCancelled,   1, CANCELLED",
+            "PENDING,   markFailed,      1, FAILED",
             "TRIGGERED, markTriggered,   0, TRIGGERED",
             "TRIGGERED, markCancelled,   0, TRIGGERED",
+            "TRIGGERED, markFailed,      0, TRIGGERED",
             "CANCELLED, markTriggered,   0, CANCELLED",
             "CANCELLED, markCancelled,   0, CANCELLED",
+            "CANCELLED, markFailed,      0, CANCELLED",
+            "FAILED,    markTriggered,   0, FAILED",
+            "FAILED,    markCancelled,   0, FAILED",
+            "FAILED,    markFailed,      0, FAILED",
     })
     void statusTransitionMatrix(TaskStatus from, String operation, int expectedRows, TaskStatus expectedStatus) {
         save("t-matrix", now.minusSeconds(1));
@@ -189,6 +195,7 @@ class ScheduledTaskRepositoryTest {
         int rows = switch (operation) {
             case "markTriggered" -> repository.markTriggered("t-matrix", now);
             case "markCancelled" -> repository.markCancelled("t-matrix", now);
+            case "markFailed" -> repository.markFailed("t-matrix", now);
             default -> throw new IllegalArgumentException("Unknown operation: " + operation);
         };
 
@@ -202,6 +209,8 @@ class ScheduledTaskRepositoryTest {
             assertThat(repository.markTriggered(taskId, now)).isEqualTo(1);
         } else if (status == TaskStatus.CANCELLED) {
             assertThat(repository.markCancelled(taskId, now)).isEqualTo(1);
+        } else if (status == TaskStatus.FAILED) {
+            assertThat(repository.markFailed(taskId, now)).isEqualTo(1);
         }
     }
 }

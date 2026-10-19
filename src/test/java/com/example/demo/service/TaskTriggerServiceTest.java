@@ -4,6 +4,7 @@ import com.example.demo.model.ScheduledTask;
 import com.example.demo.model.TaskStatus;
 import com.example.demo.mq.TaskTriggerMessage;
 import com.example.demo.mq.TaskTriggerPublisher;
+import com.example.demo.mq.UnpublishableMessageException;
 import com.example.demo.repository.ScheduledTaskRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -106,6 +107,19 @@ class TaskTriggerServiceTest {
         ScheduledTask task = reload("trig-fail");
         assertThat(task.getStatus()).isEqualTo(TaskStatus.PENDING);
         assertThat(task.getTriggeredAt()).isNull();
+    }
+
+    @Test
+    void unpublishableTaskIsMarkedFailed() {
+        saveDueTask("trig-poison");
+        doThrow(new UnpublishableMessageException("too big")).when(publisher).publish(any());
+
+        assertThat(triggerService.trigger("trig-poison")).isEqualTo(TriggerOutcome.REJECTED);
+
+        ScheduledTask task = reload("trig-poison");
+        assertThat(task.getStatus()).isEqualTo(TaskStatus.FAILED);
+        assertThat(task.getTriggeredAt()).isNull();
+        assertThat(triggerService.trigger("trig-poison")).as("not retried").isEqualTo(TriggerOutcome.SKIPPED);
     }
 
     @Test

@@ -85,7 +85,7 @@ public class TaskController {
             content = @Content(schema = @Schema(implementation = TaskResponse.class)))
     @ApiResponse(responseCode = "404", description = "Task not found",
             content = @Content(mediaType = PROBLEM_JSON, schema = @Schema(implementation = ProblemDetail.class)))
-    @ApiResponse(responseCode = "409", description = "Task is already triggered or cancelled",
+    @ApiResponse(responseCode = "409", description = "Task is already triggered, cancelled or failed",
             content = @Content(mediaType = PROBLEM_JSON, schema = @Schema(implementation = ProblemDetail.class)))
     @DeleteMapping("/{taskId}")
     public TaskResponse cancel(@PathVariable("taskId") String taskId) {

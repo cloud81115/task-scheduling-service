@@ -61,6 +61,17 @@ class TaskPollerTest {
     }
 
     @Test
+    void rejectedTasksDoNotStopThePoll() {
+        when(repository.findDueTaskIds(NOW, Limit.of(100))).thenReturn(List.of("a", "b"));
+        when(triggerService.trigger("a")).thenReturn(TriggerOutcome.REJECTED);
+        when(triggerService.trigger("b")).thenReturn(TriggerOutcome.TRIGGERED);
+
+        poller.pollDueTasks();
+
+        verify(triggerService).trigger("b");
+    }
+
+    @Test
     void failedPublishStopsThePoll() {
         when(repository.findDueTaskIds(NOW, Limit.of(100))).thenReturn(List.of("a", "b", "c"));
         when(triggerService.trigger("a")).thenReturn(TriggerOutcome.TRIGGERED);

@@ -159,18 +159,17 @@ class ScheduledTaskRepositoryTest {
                 .isEqualTo(TaskStatus.TRIGGERED);
     }
 
+    /** Lock contention (SKIP LOCKED) needs two transactions and is covered in TaskTriggerServiceTest. */
     @Test
-    void revertToPendingUndoesTrigger() {
-        save("t-revert", now.minusSeconds(1));
-        repository.markTriggered("t-revert", now);
+    void lockPendingByTaskIdOnlyReturnsPendingTasks() {
+        save("t-pending", now.minusSeconds(1));
+        save("t-cancelled", now.minusSeconds(1));
+        repository.markCancelled("t-cancelled", now);
 
-        assertThat(repository.revertToPending("t-revert", now)).isEqualTo(1);
-        assertThat(repository.revertToPending("t-revert", now)).isZero();
-
-        ScheduledTask task = repository.findByTaskId("t-revert").orElseThrow();
-        assertThat(task.getStatus()).isEqualTo(TaskStatus.PENDING);
-        assertThat(task.getTriggeredAt()).isNull();
-        assertThat(repository.findDueTaskIds(now, Limit.of(10))).containsExactly("t-revert");
+        assertThat(repository.lockPendingByTaskId("t-pending")).get()
+                .extracting(ScheduledTask::getTaskId).isEqualTo("t-pending");
+        assertThat(repository.lockPendingByTaskId("t-cancelled")).isEmpty();
+        assertThat(repository.lockPendingByTaskId("t-unknown")).isEmpty();
     }
 
     /** Every (current status, operation) pair: only the allowed transitions update a row. */
@@ -178,13 +177,10 @@ class ScheduledTaskRepositoryTest {
     @CsvSource({
             "PENDING,   markTriggered,   1, TRIGGERED",
             "PENDING,   markCancelled,   1, CANCELLED",
-            "PENDING,   revertToPending, 0, PENDING",
             "TRIGGERED, markTriggered,   0, TRIGGERED",
             "TRIGGERED, markCancelled,   0, TRIGGERED",
-            "TRIGGERED, revertToPending, 1, PENDING",
             "CANCELLED, markTriggered,   0, CANCELLED",
             "CANCELLED, markCancelled,   0, CANCELLED",
-            "CANCELLED, revertToPending, 0, CANCELLED",
     })
     void statusTransitionMatrix(TaskStatus from, String operation, int expectedRows, TaskStatus expectedStatus) {
         save("t-matrix", now.minusSeconds(1));
@@ -193,7 +189,6 @@ class ScheduledTaskRepositoryTest {
         int rows = switch (operation) {
             case "markTriggered" -> repository.markTriggered("t-matrix", now);
             case "markCancelled" -> repository.markCancelled("t-matrix", now);
-            case "revertToPending" -> repository.revertToPending("t-matrix", now);
             default -> throw new IllegalArgumentException("Unknown operation: " + operation);
         };
 

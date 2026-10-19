@@ -29,6 +29,20 @@ public interface ScheduledTaskRepository extends JpaRepository<ScheduledTask, Lo
             """)
     List<String> findDueTaskIds(@Param("now") Instant now, Limit limit);
 
+    /**
+     * Row-locks the task until the surrounding transaction ends, if it is still
+     * PENDING. SKIP LOCKED returns nothing instead of waiting when another
+     * poller already holds the lock, so pollers never block each other.
+     * Must be called inside a transaction.
+     */
+    @Query(nativeQuery = true, value = """
+            select * from scheduled_task
+             where task_id = :taskId
+               and status = 'PENDING'
+               for update skip locked
+            """)
+    Optional<ScheduledTask> lockPendingByTaskId(@Param("taskId") String taskId);
+
     /*
      * Status transitions are conditional updates: the WHERE clause checks the
      * current status, so when two callers race (two pollers, or a poller and a
@@ -57,16 +71,4 @@ public interface ScheduledTaskRepository extends JpaRepository<ScheduledTask, Lo
                and t.status = com.example.demo.model.TaskStatus.PENDING
             """)
     int markCancelled(@Param("taskId") String taskId, @Param("now") Instant now);
-
-    /** Undo markTriggered when publishing to MQ fails, so the next poll retries it. */
-    @Transactional
-    @Modifying(flushAutomatically = true, clearAutomatically = true)
-    @Query("""
-            update ScheduledTask t
-               set t.status = com.example.demo.model.TaskStatus.PENDING,
-                   t.triggeredAt = null, t.updatedAt = :now
-             where t.taskId = :taskId
-               and t.status = com.example.demo.model.TaskStatus.TRIGGERED
-            """)
-    int revertToPending(@Param("taskId") String taskId, @Param("now") Instant now);
 }

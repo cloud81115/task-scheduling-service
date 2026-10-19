@@ -42,5 +42,7 @@ springdoc:
 
 app:
   scheduler:
+    enabled: true             # tests turn this off so the poller does not race with them
     topic: task-schedule-topic
     poll-interval-ms: 1000
+    batch-size: 100           # max due tasks handled per poll

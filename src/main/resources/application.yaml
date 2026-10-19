@@ -27,6 +27,9 @@ spring:
     redis:
       host: localhost
       port: 6379
+      timeout: 500ms        # give up on a stuck Redis quickly and read MySQL instead
+  cache:
+    type: redis             # fail at startup instead of silently caching in memory
 
 # RocketMQ
 rocketmq:
@@ -46,3 +49,5 @@ app:
     topic: task-schedule-topic
     poll-interval-ms: 1000
     batch-size: 100           # max due tasks handled per poll
+  cache:
+    task-ttl: 10m             # safety net if an eviction is missed

@@ -1,11 +1,14 @@
 package com.example.demo.service;
 
+import com.example.demo.config.CacheConfig;
 import com.example.demo.model.ScheduledTask;
 import com.example.demo.model.TaskStatus;
 import com.example.demo.model.dto.CreateTaskRequest;
 import com.example.demo.model.dto.PageResponse;
 import com.example.demo.model.dto.TaskResponse;
 import com.example.demo.repository.ScheduledTaskRepository;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -37,6 +40,8 @@ public class TaskService {
         }
     }
 
+    // Single-argument methods are cached by that argument, so the key is the taskId.
+    @Cacheable(CacheConfig.TASKS)
     public TaskResponse get(String taskId) {
         return repository.findByTaskId(taskId)
                 .map(TaskResponse::from)
@@ -49,6 +54,8 @@ public class TaskService {
                 .map(TaskResponse::from));
     }
 
+    /** Evicts only on success: a 404 or 409 means the task did not change. */
+    @CacheEvict(CacheConfig.TASKS)
     public TaskResponse cancel(String taskId) {
         // Update first and let the database decide; reading the status first and
         // then cancelling would race with the poller triggering the same task.

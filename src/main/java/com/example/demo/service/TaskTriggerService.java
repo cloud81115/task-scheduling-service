@@ -1,11 +1,13 @@
 package com.example.demo.service;
 
+import com.example.demo.config.CacheConfig;
 import com.example.demo.model.ScheduledTask;
 import com.example.demo.mq.TaskTriggerMessage;
 import com.example.demo.mq.TaskTriggerPublisher;
 import com.example.demo.repository.ScheduledTaskRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,6 +45,11 @@ public class TaskTriggerService {
         this.clock = clock;
     }
 
+    /**
+     * Evicts the cached task after the commit (see {@link CacheConfig}), whatever
+     * the outcome: an unnecessary eviction only costs one extra read.
+     */
+    @CacheEvict(CacheConfig.TASKS)
     @Transactional
     public TriggerOutcome trigger(String taskId) {
         ScheduledTask task = repository.lockPendingByTaskId(taskId).orElse(null);

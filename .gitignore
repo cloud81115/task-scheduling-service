@@ -33,8 +33,3 @@ build/
 
 ### macOS ###
 .DS_Store
-
-### Personal notes (not for submission) ###
-PLAN.md
-NOTES.md
-docker-compose.override.yml

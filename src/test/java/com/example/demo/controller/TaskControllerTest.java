@@ -8,6 +8,8 @@ import com.example.demo.service.TaskNotFoundException;
 import com.example.demo.service.TaskService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.http.MediaType;
@@ -94,9 +96,30 @@ class TaskControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(content().contentType(PROBLEM_JSON))
                 .andExpect(jsonPath("$.detail").value("Request validation failed"))
-                .andExpect(jsonPath("$.errors.taskId").value("must not be blank"))
+                // Blank also fails the pattern; only one message per field is kept.
+                .andExpect(jsonPath("$.errors.taskId").exists())
                 .andExpect(jsonPath("$.errors.executeAt").value("must be a future date"))
                 .andExpect(jsonPath("$.errors.payload").value("must not be empty"));
+
+        verifyNoInteractions(taskService);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"abc-123", "order:42", "v1.2", "a_b", "3f2b8c1e-9d4a-4f6b-8e2a-1c5d7f9b0a3e"})
+    void taskIdsSafeInUrlsAndMessageKeysAreAccepted(String taskId) throws Exception {
+        when(taskService.create(any())).thenReturn(pending(taskId));
+
+        postTask(taskId, EXECUTE_AT, Map.of("type", "email")).andExpect(status().isCreated());
+    }
+
+    /** These could be created but never fetched or cancelled by URL, or would break the message key. */
+    @ParameterizedTest
+    @ValueSource(strings = {"a/b", " abc ", "order 123", ".", "..", "-x", "a?b", "a#b", "a%2Fb"})
+    void taskIdsUnsafeInUrlsOrMessageKeysAreRejected(String taskId) throws Exception {
+        postTask(taskId, EXECUTE_AT, Map.of("type", "email"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.taskId").value(
+                        "must start with a letter or digit and contain only letters, digits, '.', '_', ':' or '-'"));
 
         verifyNoInteractions(taskService);
     }

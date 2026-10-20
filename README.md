@@ -1,3 +1,77 @@
+# Task Scheduling Service
+
+A Spring Boot service that schedules tasks and publishes each one to RocketMQ when it is due. MySQL stores the tasks, Redis caches task lookups, and a poller triggers due tasks with at-least-once delivery.
+
+Java 21 · Spring Boot 3.5 · MySQL 8 · Redis 7 · RocketMQ 5 · 76 tests
+
+**Setup, curl samples and configuration: [HELP.md](HELP.md).** The original assignment follows below, unchanged.
+
+```
+POST /tasks ──► MySQL (status = PENDING)
+                  │
+Poller, every second: due PENDING tasks, one transaction each
+   lock the row (FOR UPDATE SKIP LOCKED) ─► publish to RocketMQ (key = taskId) ─► mark TRIGGERED ─► commit
+                  │
+GET /tasks/{taskId} ──► Redis cache ──(miss)──► MySQL
+```
+
+## Demo
+
+**All 76 tests pass** (`./mvnw test`)
+
+![Tests](docs/images/all_test.png)
+
+**The API in Swagger UI**
+
+![Swagger UI](docs/images/swagger_screen.png)
+
+**Create a task due in 30 seconds:** `201 Created` with its `Location`
+
+![Create a task](docs/images/create.png)
+
+**List pending tasks**, paginated
+
+![List pending tasks](docs/images/get_list.png)
+
+**Once due, the task is triggered**
+
+![Triggered task](docs/images/get_one.png)
+
+**The messages in RocketMQ**, keyed by taskId
+
+![RocketMQ messages](docs/images/rocketmq_console.png)
+
+**Cancelling a task that has already been triggered:** `409 Conflict`
+
+![Cancel conflict](docs/images/cancel.png)
+
+**Invalid requests are rejected** with the failing fields
+
+![Validation error](docs/images/validation_error.png)
+
+## Design decisions
+
+### Delivery
+
+- **The task row is the outbox.** `POST /tasks` only writes MySQL, so creating a task never half-succeeds. The poller is the relay: per due task, one transaction locks the `PENDING` row, publishes synchronously, then marks it `TRIGGERED`.
+- **At-least-once.** If the app dies after publishing but before committing, the transaction rolls back and the task is published again on the next poll. Nothing is lost, but a message can arrive twice, so consumers deduplicate by `taskId`, which is also the message key.
+- **Status changes are conditional updates** (`UPDATE ... WHERE status = 'PENDING'`), so a trigger and a cancel can never both succeed. A cancel that arrives while the task is being published waits for the row lock, then gets `409`. Pollers on several instances skip each other's rows (`SKIP LOCKED`).
+- **Failures are handled by kind, not by count.** If the broker is down, the task stays `PENDING` and the next poll retries it, with no limit: a limit would turn a broker restart into a pile of failed tasks. A message that can never be published (e.g. over the broker's size limit) marks its task `FAILED` instead, so it cannot hold up the tasks due after it.
+
+### Redis
+
+- **Cache for single-task reads** (`GET /tasks/{taskId}`, Spring Cache). An indexed MySQL read already takes under a millisecond, so the point is to absorb repeated reads, such as clients polling a task's status. If Redis fails, reads fall back to MySQL.
+- **Evicted after the commit.** The caching advice wraps the transaction advice, so a trigger evicts only after it commits; evicting earlier would let a concurrent read cache the old row again. `transactionAware()` also defers evictions, but its after-commit eviction bypasses the cache error handler, so a Redis outage would stall the poller.
+- **Known limitation: a stale `pending` can be cached for up to 1 minute.** A read can fetch `PENDING`, the task is triggered and evicted, and only then the read writes `PENDING` back. The 1-minute TTL bounds this.
+- **No Redis sorted-set delay queue.** Measured on 1 million rows, the indexed query for due tasks takes 0.26 ms (0.03 ms with `ZRANGEBYSCORE`), while handling each task takes 1.1 ms. A sorted set would speed up about 0.2% of the work and add a second copy of the schedule to keep in sync. It pays off once MySQL load is the bottleneck.
+
+### Future work
+
+- Retry counts with exponential backoff and a dead-letter state, if the downstream becomes endpoints that can fail on their own
+- Alert on scheduler lag (how long the oldest due task has been pending), which catches any cause of delay
+- Batch locking and a worker pool for higher throughput
+
+---
 
 # 📬 Task Scheduling Service – Backend Homework
 
